@@ -20,11 +20,17 @@ try:
     conn.execute('''CREATE TABLE IF NOT EXISTS todo (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         task TEXT NOT NULL,
+        comment TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         done INTEGER DEFAULT 0
     )''')
+    # 既存テーブルにcommentカラムがなければ追加
+    try:
+        conn.execute('ALTER TABLE todo ADD COLUMN comment TEXT')
+    except Exception:
+        pass
     conn.commit()
-    logging.info("todoテーブル初期化完了")
+    logging.info("todoテーブル初期化完了（commentカラム追加）")
 except Exception as e:
     logging.error(f"DB接続失敗: {e}")
     st.error(f"DB接続失敗: {e}")
@@ -36,16 +42,18 @@ st.write('SQLite DB: ' + DB_PATH)
 
 # ログ表示機能は削除
 
-# TODO追加フォーム
+
+# TODO追加フォーム（コメント欄追加）
 st.subheader('TODO追加')
 with st.form(key='add_todo'):
     new_task = st.text_input('新しいTODOを入力')
+    new_comment = st.text_area('コメント・メモ')
     submitted = st.form_submit_button('追加')
     if submitted and new_task:
         try:
-            conn.execute('INSERT INTO todo (task) VALUES (?)', (new_task,))
+            conn.execute('INSERT INTO todo (task, comment) VALUES (?, ?)', (new_task, new_comment))
             conn.commit()
-            logging.info(f"TODO追加: {new_task}")
+            logging.info(f"TODO追加: {new_task}, コメント: {new_comment}")
             st.success('TODOを追加しました')
         except Exception as e:
             logging.error(f"TODO追加失敗: {e}")
@@ -55,12 +63,14 @@ with st.form(key='add_todo'):
 # TODO一覧表示・完了/削除機能
 st.subheader('TODO一覧')
 try:
-    df_todo = pd.read_sql_query('SELECT id, task, created_at, done FROM todo ORDER BY created_at DESC', conn)
+    df_todo = pd.read_sql_query('SELECT id, task, comment, created_at, done FROM todo ORDER BY created_at DESC', conn)
     for idx, row in df_todo.iterrows():
-        col1, col2, col3, col4 = st.columns([4,2,2,2])
+        col1, col2, col3, col4, col5 = st.columns([4,3,2,2,2])
         with col1:
             st.write(f"{row['task']}")
         with col2:
+            st.write(row['comment'] if row['comment'] else "")
+        with col3:
             done = st.checkbox('完了', value=bool(row['done']), key=f"done_{row['id']}")
             if done != bool(row['done']):
                 try:
@@ -71,7 +81,7 @@ try:
                 except Exception as e:
                     logging.error(f"完了状態変更失敗: {e}")
                     st.error(f"完了状態変更失敗: {e}")
-        with col3:
+        with col4:
             import datetime, pytz
             try:
                 # SQLiteのcreated_atはUTCとして扱い、JSTに変換
@@ -80,7 +90,7 @@ try:
                 st.write(dt_jst.strftime('%Y-%m-%d %H:%M:%S'))
             except Exception:
                 st.write(row['created_at'])
-        with col4:
+        with col5:
             if st.button('削除', key=f"del_{row['id']}"):
                 try:
                     conn.execute('DELETE FROM todo WHERE id=?', (row['id'],))
