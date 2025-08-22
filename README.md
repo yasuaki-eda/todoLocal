@@ -1,5 +1,5 @@
 #概要#  
-- VSCode+Gemini+Githubで開発してみる
+- VSCode+Copilot Agent+Githubで開発してみる
 
 #システム構成#  
 - ローカルPCにデータを保存する  
